@@ -142,13 +142,19 @@ def sync_all_services(db: Session) -> None:
         sync_service(db, svc)
 
 
-def build_profile(db: Session, user: User) -> str:
+def build_profile(db: Session, user: User) -> list[tuple[str, int]]:
     services = db.execute(
         select(Service.ip, Service.port)
         .join(Policy, (Policy.service_id == Service.id) & (Policy.user_id == user.id))
         .where(Policy.allowed.is_(True))
     ).all()
     return services
+
+
+def utcnow() -> datetime:
+    """Naive UTC-Zeit. SQLite gibt DateTime-Spalten ohne tz-Info zurück;
+    gemischte Vergleiche (naive vs. aware) werfen sonst TypeError."""
+    return datetime.now(timezone.utc).replace(tzinfo=None)
 
 
 def gateway_pubkey() -> str:
@@ -260,7 +266,7 @@ def create_token(payload: TokenIn, db: Session = Depends(get_db)) -> dict:
     token = Token(
         id=str(uuid.uuid4()),
         user_id=payload.user_id,
-        expires_at=datetime.now(timezone.utc) + timedelta(hours=payload.ttl_hours),
+        expires_at=utcnow() + timedelta(hours=payload.ttl_hours),
         used=False,
     )
     db.add(token)
@@ -294,7 +300,7 @@ def enroll(
     db: Session = Depends(get_db),
 ) -> Response:
     token = db.get(Token, token_id)
-    if token is None or token.used or token.expires_at < datetime.now(timezone.utc):
+    if token is None or token.used or token.expires_at < utcnow():
         raise HTTPException(status_code=403, detail="token ungültig, abgelaufen oder bereits benutzt")
     user = get_object(db, User, token.user_id)
 
@@ -371,11 +377,14 @@ def revoke_device(device_id: int, db: Session = Depends(get_db)) -> dict:
     if not policy.can_transition(device.status, policy.STATUS_REVOKED):
         raise HTTPException(status_code=409, detail=f"Widerruf aus Status '{device.status}' nicht erlaubt")
 
+    old_status = device.status
     device.status = policy.STATUS_REVOKED
     db.commit()
     try:
         gateway.delete_peer(device.id)   # Peer weg -> Tunnel stirbt
         sync_all_services(db)            # Set-Elemente der autorisierten Dienste weg
     except GatewayError as exc:
+        device.status = old_status  # Gateway-Zustand unverändert -> DB auch nicht
+        db.commit()
         raise HTTPException(status_code=502, detail=str(exc)) from exc
     return {"id": device.id, "status": device.status}

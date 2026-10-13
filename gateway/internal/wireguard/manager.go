@@ -133,6 +133,9 @@ func (m *Manager) PutPeer(id, pubkey, wgIP string) error {
 		}
 		return err
 	}
+	if err := m.writeConf(); err != nil {
+		return err
+	}
 	return m.syncconf() // Kernel-Update erst hier: atomarer Ersatz, kein Zeitfenster
 }
 
@@ -146,6 +149,9 @@ func (m *Manager) DeletePeer(id string) error {
 	}
 	delete(m.peers, id)
 	if err := m.saveState(); err != nil {
+		return err
+	}
+	if err := m.writeConf(); err != nil {
 		return err
 	}
 	return m.syncconf()

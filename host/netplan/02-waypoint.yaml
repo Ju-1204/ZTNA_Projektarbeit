@@ -1,0 +1,22 @@
+# Waypoint-Host: Interface-Konfiguration
+# host/netplan/02-waypoint.yaml -> /etc/netplan/02-waypoint.yaml (via host/install.sh)
+#
+# Regeln:
+#  - Genau EINE Default-Route: Seite A (eth0 ODER wlan0 — nie beide gleichzeitig aktiv,
+#    sonst asymmetrisches Routing, siehe Leitfaden Abschnitt 8.5).
+#  - eth1 (Seite B) bekommt NIE eine Default-Route, sonst leitet der Waypoint
+#    den Verkehr der Dienste ins Campus-Netz.
+network:
+  version: 2
+  ethernets:
+    eth0:
+      dhcp4: true                    # Seite A: Campus-Uplink (Ethernet)
+    eth1:
+      addresses: [192.168.30.1/24]   # Seite B: geschütztes Dienste-Netz (statisch)
+      # Bewusst KEINE routes-Sektion: keine Default-Route auf Seite B.
+  wifis:
+    wlan0:
+      dhcp4: true                    # Seite A per WLAN — nur aktivieren, wenn eth0 nicht genutzt wird
+      access-points:
+        "Campus-SSID":
+          password: "CHANGEME"       # PSK; für eduroam (802.1X) stattdessen wpa_supplicant-wlan0.conf nutzen

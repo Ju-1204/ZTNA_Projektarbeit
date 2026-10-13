@@ -1,0 +1,60 @@
+# ZTNA-Waypoint: Deploy-Einheit (Leitfaden Abschnitt 4.1)
+# Deploy: git pull && docker compose up -d --build
+#
+# Abweichung vom Leitfaden (begründet): LISTEN_ADDR "0.0.0.0:9090" statt
+# "127.0.0.1:9090" — die Control Plane läuft im Bridge-Netz und erreicht den
+# Host-Loopback des Gateway-Containers nicht. Der Schutz übernimmt stattdessen
+# die nft-Input-Kette (waypoint.nft): Port 9090 nur aus 172.20.0.0/24 erlaubt,
+# Campus-Netz bleibt draußen. Damit bleibt die Anforderung "API nur Control
+# Plane" erfüllt.
+
+services:
+  gateway:
+    build: ./gateway
+    container_name: ztna-gateway
+    cap_add: [NET_ADMIN, NET_RAW]
+    network_mode: host   # wg0 + nft-Sets im Host-Netz-Namespace → keine Port-Mapping-/MTU-Fallen
+    volumes:
+      - /etc/wireguard:/etc/wireguard
+    environment:
+      LISTEN_ADDR: "0.0.0.0:9090"
+      WG_IFACE: "wg0"
+      WG_ADDR: "10.9.0.1/24"
+      WG_LISTEN_PORT: "51820"
+      NFT_TABLE: "waypoint"
+      NFT_FAMILY: "inet"
+      STATE_PATH: "/etc/wireguard/gateway-state.json"
+    restart: unless-stopped
+
+  control:
+    build: ./control
+    container_name: ztna-control
+    networks:
+      control:
+        ipv4_address: 172.20.0.10   # feste Adresse gemäß IP-Plan (PROJECT.md)
+    ports:
+      - "8080:8080"
+    volumes:
+      - ./control/data:/data
+    environment:
+      GATEWAY_URL: "http://172.20.0.1:9090"   # Host-Seite des Control-Netzes (Gateway lauscht auf dem Host)
+      DB_PATH: "/data/ztna.db"
+      WG_SUBNET: "10.9.0.0/24"
+      WG_GATEWAY_IP: "10.9.0.1"
+      WG_CLIENTS_FROM: "10.9.0.10"
+      # Endpoint = eth0/wlan0-IP des Waypoint (Seite A), Clients brauchen sie im Profil.
+      # Bei DHCP ggf. DNS-Name oder statische Reservierung verwenden.
+      ENDPOINT_HOST: "CHANGEME"
+      ENDPOINT_PORT: "51820"
+      ADMIN_TOKEN: "CHANGEME"
+      MAX_DEVICES_PER_USER: "3"
+      TOKEN_TTL_HOURS: "24"
+    restart: unless-stopped
+    depends_on:
+      - gateway
+
+networks:
+  control:
+    ipam:
+      config:
+        - subnet: 172.20.0.0/24

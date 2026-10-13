@@ -1,2 +1,6 @@
 ~docs/
+.venv/
+__pycache__/
+*.pyc
+control/data/*.db
 

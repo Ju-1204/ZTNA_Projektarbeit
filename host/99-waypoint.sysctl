@@ -1,0 +1,9 @@
+# Waypoint-Host: Kernel-Netzwerkparameter
+# host/99-waypoint.sysctl -> /etc/sysctl.d/99-waypoint.conf (via host/install.sh)
+
+# Routing zwischen Seite A (Campus) und Seite B (Dienste) ermoeglichen
+net.ipv4.ip_forward = 1
+
+# Loose Reverse-Path-Filterung: Multi-Homing mit asymmetrischen Pfaden erlauben
+net.ipv4.conf.all.rp_filter = 2
+net.ipv4.conf.default.rp_filter = 2

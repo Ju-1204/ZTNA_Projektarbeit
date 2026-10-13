@@ -1,0 +1,60 @@
+#!/usr/sbin/nft -f
+# Waypoint-Host: zentrales Regelwerk
+# host/waypoint.nft -> /etc/nftables.conf (via host/install.sh)
+#
+# Kernidee Per-Service-Freigabe (R11): pro Dienst ein nft-Set, in das der
+# Gateway-Daemon die Tunnel-IPs der autorisierten Peers einträgt. Die
+# FORWARD-Kette erlaubt nur: saddr ∈ Set(dienst) AND daddr = dienst-ip:port.
+
+table inet waypoint {
+    # --- Per-Service-Clients (vom Gateway-Daemon via 'nft add/delete element' gepflegt) ---
+    set svc_app_clients {
+        type ipv4_addr
+    }
+    set svc_db_clients {
+        type ipv4_addr
+    }
+
+    chain input {
+        type filter hook input priority filter; policy drop;
+        iifname "lo" accept
+        ct state established,related accept
+        # Diagnose-Erweiterung gegenüber der Leitfaden-Vorlage: ICMP für
+        # Erreichbarkeitstests (ping auf den Waypoint) erlauben.
+        ip protocol icmp accept
+        iifname "eth0" tcp dport 22 accept comment "SSH-Admin (im Betrieb auf UI-Netz begrenzen)"
+        iifname { "eth0", "wlan0" } udp dport 51820 accept comment "WireGuard (Seite A)"
+        iifname "eth0" tcp dport 8080 accept comment "Control-Plane-UI (Seite A)"
+        # Gateway-API: nur aus dem Docker-Control-Netz erreichbar (172.20.0.0/24),
+        # nicht aus dem Campus-Netz. Egress bleibt policy drop.
+        ip saddr 172.20.0.0/24 tcp dport 9090 accept comment "Gateway-API nur für Control Plane"
+    }
+
+    chain forward {
+        type filter hook forward priority filter; policy drop;
+        ct state established,related accept
+
+        # Tunnel -> Dienste: PER-SERVICE (R11)
+        iifname "wg0" oifname "eth1" ip saddr @svc_app_clients ip daddr 192.168.30.10 tcp dport 443 accept
+        iifname "wg0" oifname "eth1" ip saddr @svc_db_clients ip daddr 192.168.30.11 tcp dport 5432 accept
+
+        # Egress-Filterung (Literatur-Empfehlung): Dienste -> nur Antworten,
+        # nie Initiativverkehr in den Tunnel oder ins Campus-Netz.
+        iifname "eth1" oifname "wg0" ct state established,related accept
+        iifname "eth1" oifname "eth0" ct state established,related accept
+        # Bewusst KEINE Regel "eth1 -> eth0 new": Dienste dürfen nicht selbst
+        # ins Campus-Netz (kompromittierter Dienst kann nicht exfiltrieren).
+    }
+
+    chain output {
+        type filter hook output priority filter; policy accept;
+    }
+}
+
+table ip waypoint-nat {
+    chain postrouting {
+        type nat hook postrouting priority srcnat;
+        # Dienste sehen nie die Client-IP, nur den Waypoint (kein Return-Path-Problem).
+        oifname "eth1" ip saddr 10.9.0.0/24 masquerade
+    }
+}

@@ -44,6 +44,12 @@ table inet waypoint {
         iifname "wg0" oifname "eth1" ip saddr @svc_app_clients ip daddr 192.168.30.10 tcp dport 443 accept
         iifname "wg0" oifname "eth1" ip saddr @svc_db_clients ip daddr 192.168.30.11 tcp dport 5432 accept
 
+        # Docker-Bridge -> Seite A (Internet): noetig fuer Image-Builds
+        # (pip/apt im Build brauchen DNS+Download). Eingehend bleibt alles
+        # gesperrt (input policy drop) und Seite B bleibt fuer Container
+        # unerreichbar — nur der Weg nach draußen ist geoeffnet.
+        ip saddr 172.16.0.0/12 oifname "eth0" accept
+
         # Egress-Filterung (Literatur-Empfehlung): Dienste -> nur Antworten,
         # nie Initiativverkehr in den Tunnel oder ins Campus-Netz.
         iifname "eth1" oifname "wg0" ct state established,related accept

@@ -42,11 +42,11 @@ services:
       WG_SUBNET: "10.9.0.0/24"
       WG_GATEWAY_IP: "10.9.0.1"
       WG_CLIENTS_FROM: "10.9.0.10"
-      # Endpoint = eth0/wlan0-IP des Waypoint (Seite A), Clients brauchen sie im Profil.
-      # Bei DHCP ggf. DNS-Name oder statische Reservierung verwenden.
-      ENDPOINT_HOST: "CHANGEME"
+      # Endpoint = IP des Waypoint in Seite A (wlo1). Werte aus .env-Datei
+      # (siehe .env.example) — Geheimnisse gehören nicht ins Repo.
+      ENDPOINT_HOST: "${ENDPOINT_HOST:-CHANGEME}"
       ENDPOINT_PORT: "51820"
-      ADMIN_TOKEN: "CHANGEME"
+      ADMIN_TOKEN: "${ADMIN_TOKEN:-CHANGEME}"
       MAX_DEVICES_PER_USER: "3"
       TOKEN_TTL_HOURS: "24"
     restart: unless-stopped

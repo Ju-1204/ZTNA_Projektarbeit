@@ -1,6 +1,10 @@
 #!/usr/sbin/nft -f
-# Waypoint-Host: zentrales Regelwerk
+# Waypoint-Host (alter Laptop): zentrales Regelwerk
 # host/waypoint.nft -> /etc/nftables.conf (via host/install.sh)
+#
+# Interface-Mapping dieses Geräts ('ip a'):
+#   wlo1 = Seite A (WLAN, Heim-/Campus-Netz)
+#   eno1 = Seite B (Ethernet, geschütztes Dienste-Netz 192.168.30.0/24)
 #
 # Kernidee Per-Service-Freigabe (R11): pro Dienst ein nft-Set, in das der
 # Gateway-Daemon die Tunnel-IPs der autorisierten Peers einträgt. Die
@@ -22,11 +26,11 @@ table inet waypoint {
         # Diagnose-Erweiterung gegenüber der Leitfaden-Vorlage: ICMP für
         # Erreichbarkeitstests (ping auf den Waypoint) erlauben.
         ip protocol icmp accept
-        iifname "eth0" tcp dport 22 accept comment "SSH-Admin (im Betrieb auf UI-Netz begrenzen)"
-        iifname { "eth0", "wlan0" } udp dport 51820 accept comment "WireGuard (Seite A)"
-        iifname "eth0" tcp dport 8080 accept comment "Control-Plane-UI (Seite A)"
+        iifname "wlo1" tcp dport 22 accept comment "SSH-Admin (Seite A)"
+        iifname "wlo1" udp dport 51820 accept comment "WireGuard (Seite A)"
+        iifname "wlo1" tcp dport 8080 accept comment "Control-Plane-UI (Seite A)"
         # Gateway-API: nur aus dem Docker-Control-Netz erreichbar (172.20.0.0/24),
-        # nicht aus dem Campus-Netz. Egress bleibt policy drop.
+        # nicht aus dem Heim-/Campus-Netz. Egress bleibt policy drop.
         ip saddr 172.20.0.0/24 tcp dport 9090 accept comment "Gateway-API nur für Control Plane"
     }
 
@@ -35,14 +39,14 @@ table inet waypoint {
         ct state established,related accept
 
         # Tunnel -> Dienste: PER-SERVICE (R11)
-        iifname "wg0" oifname "eth1" ip saddr @svc_app_clients ip daddr 192.168.30.10 tcp dport 443 accept
-        iifname "wg0" oifname "eth1" ip saddr @svc_db_clients ip daddr 192.168.30.11 tcp dport 5432 accept
+        iifname "wg0" oifname "eno1" ip saddr @svc_app_clients ip daddr 192.168.30.10 tcp dport 443 accept
+        iifname "wg0" oifname "eno1" ip saddr @svc_db_clients ip daddr 192.168.30.11 tcp dport 5432 accept
 
         # Egress-Filterung (Literatur-Empfehlung): Dienste -> nur Antworten,
         # nie Initiativverkehr in den Tunnel oder ins Campus-Netz.
-        iifname "eth1" oifname "wg0" ct state established,related accept
-        iifname "eth1" oifname "eth0" ct state established,related accept
-        # Bewusst KEINE Regel "eth1 -> eth0 new": Dienste dürfen nicht selbst
+        iifname "eno1" oifname "wg0" ct state established,related accept
+        iifname "eno1" oifname "wlo1" ct state established,related accept
+        # Bewusst KEINE Regel "eno1 -> wlo1 new": Dienste dürfen nicht selbst
         # ins Campus-Netz (kompromittierter Dienst kann nicht exfiltrieren).
     }
 
@@ -55,6 +59,6 @@ table ip waypoint-nat {
     chain postrouting {
         type nat hook postrouting priority srcnat;
         # Dienste sehen nie die Client-IP, nur den Waypoint (kein Return-Path-Problem).
-        oifname "eth1" ip saddr 10.9.0.0/24 masquerade
+        oifname "eno1" ip saddr 10.9.0.0/24 masquerade
     }
 }

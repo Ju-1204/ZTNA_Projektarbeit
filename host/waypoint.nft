@@ -52,7 +52,7 @@ table inet waypoint {
         # (pip/apt im Build brauchen DNS+Download). Eingehend bleibt alles
         # gesperrt (input policy drop) und Seite B bleibt fuer Container
         # unerreichbar — nur der Weg nach draußen ist geoeffnet.
-        ip saddr 172.16.0.0/12 oifname "eth0" accept
+        ip saddr 172.16.0.0/12 oifname "wlo1" accept
 
         # Egress-Filterung (Literatur-Empfehlung): Dienste -> nur Antworten,
         # nie Initiativverkehr in den Tunnel oder ins Campus-Netz.

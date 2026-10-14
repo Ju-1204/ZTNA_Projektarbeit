@@ -44,6 +44,13 @@ table inet waypoint {
         type filter hook forward priority filter; policy drop;
         ct state established,related accept
 
+        # Docker-Publishing: Pakete an veroeffentlichte Container-Ports
+        # (DNAT, z. B. 8080 der Control Plane) durchlassen. Ohne diese Regel
+        # erreicht der Browser die UI nicht, weil DNAT-Pakete die FORWARD-
+        # Kette durchlaufen und policy drop greift. Nur published Ports sind
+        # betroffen — direkter Container-Zugriff bleibt gesperrt.
+        ct status dnat accept
+
         # Tunnel -> Dienste: PER-SERVICE (R11)
         iifname "wg0" oifname "eno1" ip saddr @svc_app_clients ip daddr 192.168.30.10 tcp dport 443 accept
         iifname "wg0" oifname "eno1" ip saddr @svc_db_clients ip daddr 192.168.30.11 tcp dport 5432 accept

@@ -10,13 +10,14 @@ dokumentierter Scope-Ausschluss).
 from __future__ import annotations
 
 import os
+import re
 import uuid
 from contextlib import asynccontextmanager
 from datetime import datetime, timedelta, timezone
 
 from fastapi import Depends, FastAPI, Header, HTTPException, Query
 from fastapi.responses import JSONResponse, PlainTextResponse, Response
-from pydantic import BaseModel, EmailStr, Field
+from pydantic import BaseModel, Field, field_validator
 from sqlalchemy import create_engine, func, select
 from sqlalchemy.orm import Session, sessionmaker
 
@@ -69,8 +70,18 @@ def require_admin(x_admin_token: str = Header(default="")) -> None:
 
 
 class UserIn(BaseModel):
-    email: EmailStr
+    email: str
     role: str = Field(default="student", pattern="^(student|admin)$")
+
+    @field_validator("email")
+    @classmethod
+    def valid_email(cls, value: str) -> str:
+        """Struktur-Check statt E-Mail-Deliverability-Prüfung (kein DNS):
+        Der Waypoint soll auch ohne Internet-DNS Nutzer anlegen können.
+        Abweichung von EmailStr, begründet: DNS-Abfrage hing im Container."""
+        if not re.fullmatch(r"[^@\s]+@[^@\s]+\.[^@\s]+", value):
+            raise ValueError("keine gültige E-Mail-Adresse (Format: user@domain.tld)")
+        return value.lower()
 
 
 class ServiceIn(BaseModel):

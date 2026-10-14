@@ -10,6 +10,12 @@
 # Gateway-Daemon die Tunnel-IPs der autorisierten Peers einträgt. Die
 # FORWARD-Kette erlaubt nur: saddr ∈ Set(dienst) AND daddr = dienst-ip:port.
 
+# Idempotenz: eigene Tabellen vorab entfernen, damit ein erneutes Laden
+# (z. B. zweiter install.sh-Lauf) nicht an bestehenden Tabellen scheitert.
+# Fremde Tabellen (z. B. die von Docker) bleiben unberührt.
+destroy table inet waypoint
+destroy table ip waypoint-nat
+
 table inet waypoint {
     # --- Per-Service-Clients (vom Gateway-Daemon via 'nft add/delete element' gepflegt) ---
     set svc_app_clients {

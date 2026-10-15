@@ -7,8 +7,12 @@ COPY cmd/ ./cmd/
 COPY internal/ ./internal/
 RUN CGO_ENABLED=0 go build -o /out/gateway ./cmd/gateway
 
-# Runtime: wireguard-tools (wg, wg-quick), nftables, iproute2 (ip)
-FROM alpine:3.20
-RUN apk add --no-cache wireguard-tools nftables iproute2
+# Runtime: Debian trixie statt Alpine — trixie liefert eine aktuelle
+# nftables-Version; alpine:3.20 (nft 1.0.x) segfaultete auf Kernel 7.0
+# bei 'nft -j list set'. Debian-Userland passt ausserdem zum Ubuntu-Host.
+FROM debian:trixie-slim
+RUN apt-get update \
+    && apt-get install -y --no-install-recommends wireguard-tools nftables iproute2 \
+    && rm -rf /var/lib/apt/lists/*
 COPY --from=build /out/gateway /usr/local/bin/gateway
 ENTRYPOINT ["gateway"]
